@@ -1,0 +1,73 @@
+
+##
+#Handling and creating all provided users
+#
+
+---
+ # create new group and give it sudo privileges
+- name: Install all users
+  hosts: all
+  become: true
+  vars:
+    admin_group: 'company_admin'
+
+
+
+    #add users to servers
+    company_admin_list:
+      - name: "Zeinab Hamed"
+        username: "zeinab"
+        keys:
+          active:
+            - "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA5kSivOqhs0U9ZMN20nxFe27QZ3t0lT2zbH7OSX=="
+
+        shell: "/bin/bash"
+        state: present
+
+
+      # remove users
+      - name: "Ahmed Mohammed"
+        username: "ahmedmoh"
+        state: absent
+
+  tasks:
+
+  - name: Setup all users
+    user:
+      name: "{{ item.username }}"
+      state: "{{ item.state | default('present') }}"
+      shell: "{{ item.shell | default('/bin/bash') }}"
+      group: "{{ admin_group }}"
+      remove: yes
+    when: item.username is defined
+    with_items:
+      - "{{ full_admin_list }}"
+
+  - name: Add SSH-keys to users
+    authorized_key:
+      user: "{{ item.0.username }}"
+      key: "{{ item.1 }}"
+    with_subelements:
+      - "{{ full_admin_list }}"
+      - keys.active
+      - flags:
+        skip_missing: True
+    when: item.0.state != "absent"
+
+  - name: Remove old SSH-keys from users
+    authorized_key:
+      user: "{{ item.0.username }}"
+      key: "{{ item.1 }}"
+      state: absent
+    with_subelements:
+      - "{{ full_admin_list }}"
+      - keys.disabled
+      - flags:
+        skip_missing: True
+    when: item.0.state != "absent"
+
+  - name: Add admin group to sudoers
+    lineinfile: dest=/etc/sudoers regexp="^%{{ admin_group }}" line="%{{ admin_group }} ALL=(ALL) NOPASSWD:ALL"
+
+  - name: Disable Requiretty from sudoers
+    lineinfile: dest=/etc/sudoers regexp="Defaults    requiretty" line="#Defaults    requiretty"
